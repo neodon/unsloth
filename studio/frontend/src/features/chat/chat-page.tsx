@@ -587,8 +587,11 @@ export function ChatPage(): ReactElement {
     void ejectModel();
   }, [ejectModel]);
   const handleNewThread = useCallback(() => {
-    useChatRuntimeStore.getState().setActiveThreadId(null);
-    setView({ mode: "single", newThreadNonce: crypto.randomUUID() });
+    const nonce = crypto.randomUUID();
+    const store = useChatRuntimeStore.getState();
+    store.setActiveThreadId(null);
+    store.setNewThreadInitializingNonce(nonce);
+    setView({ mode: "single", newThreadNonce: nonce });
   }, []);
   const handleNewCompare = useCallback(() => {
     setView({ mode: "compare", pairId: crypto.randomUUID() });

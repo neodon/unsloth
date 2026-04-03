@@ -235,6 +235,61 @@ async function resolveUseAdapter(
   }
 }
 
+async function waitForResolvedThreadId(
+  abortSignal: AbortSignal,
+  timeoutMs = 2000,
+): Promise<string | undefined> {
+  const initial = useChatRuntimeStore.getState();
+  if (!initial.newThreadInitializingNonce) {
+    return initial.activeThreadId ?? undefined;
+  }
+  if (abortSignal.aborted) return undefined;
+
+  return new Promise((resolve) => {
+    let done = false;
+
+    const finish = (threadId: string | undefined) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      unsubscribe();
+      abortSignal.removeEventListener("abort", onAbort);
+      resolve(threadId);
+    };
+
+    const onAbort = () => finish(undefined);
+    const unsubscribe = useChatRuntimeStore.subscribe((state) => {
+      if (!state.newThreadInitializingNonce) {
+        finish(state.activeThreadId ?? undefined);
+      }
+    });
+    const timer = window.setTimeout(() => {
+      const state = useChatRuntimeStore.getState();
+      finish(
+        state.newThreadInitializingNonce
+          ? undefined
+          : (state.activeThreadId ?? undefined),
+      );
+    }, timeoutMs);
+
+    abortSignal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+async function resolveThreadIdForRequest(
+  unstableThreadId: string | undefined,
+  abortSignal: AbortSignal,
+): Promise<string | undefined> {
+  if (unstableThreadId) {
+    return unstableThreadId;
+  }
+  const runtime = useChatRuntimeStore.getState();
+  if (!runtime.newThreadInitializingNonce) {
+    return runtime.activeThreadId ?? undefined;
+  }
+  return waitForResolvedThreadId(abortSignal);
+}
+
 /** Wait for an in-progress model load to finish (polls store every 500ms). */
 function waitForModelReady(abortSignal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -421,8 +476,10 @@ export function createOpenAIStreamAdapter(): ChatModelAdapter {
   return {
     async *run({ messages, abortSignal, unstable_threadId }) {
       let runtime = useChatRuntimeStore.getState();
-      let resolvedThreadId =
-        unstable_threadId ?? runtime.activeThreadId ?? undefined;
+      let resolvedThreadId = await resolveThreadIdForRequest(
+        unstable_threadId,
+        abortSignal,
+      );
 
       // Wait for in-progress model load to finish before inferring
       if (runtime.modelLoading) {
@@ -443,7 +500,10 @@ export function createOpenAIStreamAdapter(): ChatModelAdapter {
 
       // Re-read store after potential auto-load / model ready wait
       runtime = useChatRuntimeStore.getState();
-      resolvedThreadId = unstable_threadId ?? runtime.activeThreadId ?? undefined;
+      resolvedThreadId = await resolveThreadIdForRequest(
+        unstable_threadId,
+        abortSignal,
+      );
       const { params } = runtime;
       const {
         supportsTools,

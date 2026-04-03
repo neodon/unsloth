@@ -686,15 +686,33 @@ function ThreadNewChatSwitch({
     let cancelled = false;
 
     void (async () => {
-      aui.threads().switchToNewThread();
-      const { remoteId } = await aui.threadListItem().initialize();
-      if (!cancelled) {
-        useChatRuntimeStore.getState().setActiveThreadId(remoteId);
+      const store = useChatRuntimeStore.getState();
+      store.setNewThreadInitializingNonce(nonce);
+      try {
+        aui.threads().switchToNewThread();
+        const { remoteId } = await aui.threadListItem().initialize();
+        if (
+          !cancelled &&
+          useChatRuntimeStore.getState().newThreadInitializingNonce === nonce
+        ) {
+          useChatRuntimeStore.getState().setActiveThreadId(remoteId);
+        }
+      } catch {
+        // Ignore initialization failures and leave fallback handling to callers.
+      } finally {
+        const currentStore = useChatRuntimeStore.getState();
+        if (currentStore.newThreadInitializingNonce === nonce) {
+          currentStore.setNewThreadInitializingNonce(null);
+        }
       }
     })();
 
     return () => {
       cancelled = true;
+      const store = useChatRuntimeStore.getState();
+      if (store.newThreadInitializingNonce === nonce) {
+        store.setNewThreadInitializingNonce(null);
+      }
     };
   }, [aui, isLoading, nonce]);
 
@@ -706,13 +724,19 @@ function ActiveThreadSync({
 }: { enabled: boolean }): ReactElement | null {
   const mainThreadId = useAuiState(({ threads }) => threads.mainThreadId);
   const setActiveThreadId = useChatRuntimeStore((state) => state.setActiveThreadId);
+  const newThreadInitializingNonce = useChatRuntimeStore(
+    (state) => state.newThreadInitializingNonce,
+  );
 
   useEffect(() => {
     if (!enabled) {
       return;
     }
+    if (newThreadInitializingNonce) {
+      return;
+    }
     setActiveThreadId(mainThreadId ?? null);
-  }, [enabled, mainThreadId, setActiveThreadId]);
+  }, [enabled, mainThreadId, newThreadInitializingNonce, setActiveThreadId]);
 
   return null;
 }

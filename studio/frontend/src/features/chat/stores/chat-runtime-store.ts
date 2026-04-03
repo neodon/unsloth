@@ -169,6 +169,7 @@ type ChatRuntimeStore = {
   defaultChatTemplate: string | null;
   chatTemplateOverride: string | null;
   activeThreadId: string | null;
+  newThreadInitializingNonce: string | null;
   pendingAudioBase64: string | null;
   pendingAudioName: string | null;
   contextUsage: {
@@ -188,6 +189,7 @@ type ChatRuntimeStore = {
   setModelsError: (error: string | null) => void;
   setCheckpoint: (modelId: string, ggufVariant?: string | null) => void;
   setActiveThreadId: (threadId: string | null) => void;
+  setNewThreadInitializingNonce: (nonce: string | null) => void;
   clearCheckpoint: () => void;
   setReasoningEnabled: (enabled: boolean) => void;
   setToolsEnabled: (enabled: boolean) => void;
@@ -234,6 +236,7 @@ export const useChatRuntimeStore = create<ChatRuntimeStore>((set) => ({
   defaultChatTemplate: null,
   chatTemplateOverride: null,
   activeThreadId: null,
+  newThreadInitializingNonce: null,
   pendingAudioBase64: null,
   pendingAudioName: null,
   contextUsage: null,
@@ -283,6 +286,8 @@ export const useChatRuntimeStore = create<ChatRuntimeStore>((set) => ({
       activeGgufVariant: ggufVariant ?? null,
     })),
   setActiveThreadId: (activeThreadId) => set({ activeThreadId, contextUsage: null }),
+  setNewThreadInitializingNonce: (newThreadInitializingNonce) =>
+    set({ newThreadInitializingNonce }),
   clearCheckpoint: () =>
     set((state) => ({
       params: {
